@@ -1,0 +1,109 @@
+#
+# Production Docker Compose for Apache Superset
+# Languages: EN, RU only
+#
+# Usage:
+#   docker compose -f docker-prod/docker-compose.prod.yml up -d
+#
+
+x-superset-common: &superset-common
+  image: ${SUPERSET_IMAGE:-superset-prod:latest}
+  env_file:
+    - .env.prod
+  volumes:
+    - ./pythonpath_prod:/app/pythonpath
+    - superset_home:/app/superset_home
+
+x-superset-depends-on: &superset-depends-on
+  db:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+
+services:
+  redis:
+    image: redis:7
+    container_name: superset_cache
+    restart: unless-stopped
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:16
+    container_name: superset_db
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    volumes:
+      - db_home:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-superset}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  superset-init:
+    <<: *superset-common
+    container_name: superset_init
+    command: ["/app/docker/docker-init.sh"]
+    depends_on: *superset-depends-on
+    user: "root"
+    healthcheck:
+      disable: true
+
+  superset:
+    <<: *superset-common
+    container_name: superset_app
+    command: ["/app/docker/docker-bootstrap.sh", "app-gunicorn"]
+    user: "root"
+    restart: unless-stopped
+    ports:
+      - "${SUPERSET_PORT:-8088}:8088"
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+
+  superset-worker:
+    <<: *superset-common
+    container_name: superset_worker
+    command: ["/app/docker/docker-bootstrap.sh", "worker"]
+    restart: unless-stopped
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    user: "root"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  superset-worker-beat:
+    <<: *superset-common
+    container_name: superset_worker_beat
+    command: ["/app/docker/docker-bootstrap.sh", "beat"]
+    restart: unless-stopped
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    user: "root"
+    healthcheck:
+      disable: true
+
+volumes:
+  superset_home:
+    external: false
+  db_home:
+    external: false
+  redis:
+    external: false

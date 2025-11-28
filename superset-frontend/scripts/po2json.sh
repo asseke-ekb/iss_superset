@@ -24,12 +24,14 @@ set -e
 
 export NODE_NO_WARNINGS=1
 
-for file in $( find ../superset/translations/** -name '*.po' );
-do
-  extension=${file##*.}
-  filename="${file%.*}"
-  if [ $extension == "po" ]
-  then
+# Only build translations for specified languages (en and ru)
+# This significantly reduces build time by skipping unused languages
+ENABLED_LANGUAGES="en ru"
+
+for lang in $ENABLED_LANGUAGES; do
+  file="../superset/translations/${lang}/LC_MESSAGES/messages.po"
+  if [ -f "$file" ]; then
+    filename="${file%.*}"
     echo "po2json --domain superset --format jed1.x $file $filename.json"
     po2json --domain superset --format jed1.x --fuzzy $file $filename.json
     prettier --write $filename.json
