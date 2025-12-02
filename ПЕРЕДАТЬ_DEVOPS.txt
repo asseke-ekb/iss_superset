@@ -1,0 +1,59 @@
+СПИСОК ФАЙЛОВ ДЛЯ ПЕРЕДАЧИ DEVOPS
+=====================================
+
+Передайте DevOps весь проект целиком, либо следующие файлы/папки:
+
+ОБЯЗАТЕЛЬНЫЕ ФАЙЛЫ:
+-------------------
+1. docker-prod/Dockerfile.prod               - Production Dockerfile
+2. docker-prod/docker-compose.prod.yml       - Docker Compose конфигурация
+3. docker-prod/.env.prod                     - Переменные окружения
+4. docker-prod/custom_logo.png               - Кастомный логотип
+5. docker-prod/pythonpath_prod/              - Production конфигурация Python
+6. docker-prod/DEPLOY.md                     - Инструкция по развертыванию
+7. docker-prod/README_KUBERNETES.md          - Инструкция для Kubernetes (если нужен K8s)
+
+ПЕРЕВОДЫ:
+---------
+8. superset/translations/ru/                 - Русский язык
+9. superset/translations/en/                 - Английский язык
+10. superset/translations/*.json             - Конфигурация языков
+11. superset/translations/*.py               - Python конфигурация языков
+
+КАРТА KAZAKHSTAN:
+-----------------
+12. superset-frontend/plugins/legacy-plugin-chart-country-map/src/countries/kazakhstan.geojson
+13. superset-frontend/plugins/legacy-plugin-chart-country-map/src/countries.ts
+
+FRONTEND (весь исходный код нужен для сборки):
+----------------------------------------------
+14. superset-frontend/                       - Весь frontend (для сборки)
+15. superset/                                - Backend код
+16. package.json                             - Зависимости проекта
+17. setup.py, setup.cfg, pyproject.toml      - Python настройки
+
+KUBERNETES (если нужно):
+------------------------
+18. docker-prod/k8s/                         - Kubernetes манифесты
+
+ПРОСТОЙ СПОСОБ:
+===============
+Просто передайте весь проект:
+  iss_superset/
+
+DevOps должен будет:
+1. Открыть docker-prod/DEPLOY.md
+2. Собрать образ: docker build -f docker-prod/Dockerfile.prod -t superset-prod:latest .
+3. Запустить: docker compose -f docker-prod/docker-compose.prod.yml up -d
+
+ИЛИ для Kubernetes:
+1. Собрать образ
+2. Запушить в registry
+3. Обновить k8s манифесты (заменить YOUR_REGISTRY)
+4. kubectl apply -f docker-prod/k8s/
+
+ДОСТУП:
+=======
+URL: http://localhost:8088
+Логин: admin
+Пароль: admin

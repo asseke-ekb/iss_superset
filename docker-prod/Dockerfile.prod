@@ -192,9 +192,13 @@ RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
 RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
     uv pip install -e .
 
-# Install PostgreSQL driver for production
+# Install database drivers for production
 RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
     uv pip install .[postgres]
+
+# Install ClickHouse driver
+RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
+    uv pip install clickhouse-connect
 
 # Compile Python files for faster startup
 RUN python -m compileall /app/superset

@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: superset-config
+  namespace: superset
+data:
+  superset_config.py: |
+    import os
+    from celery.schedules import crontab
+
+    # Database
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URI', 'postgresql://superset:superset@postgres:5432/superset')
+
+    # Redis
+    REDIS_HOST = os.environ.get('REDIS_HOST', 'redis')
+    REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+
+    CACHE_CONFIG = {
+        "CACHE_TYPE": "RedisCache",
+        "CACHE_DEFAULT_TIMEOUT": 300,
+        "CACHE_KEY_PREFIX": "superset_",
+        "CACHE_REDIS_HOST": REDIS_HOST,
+        "CACHE_REDIS_PORT": REDIS_PORT,
+    }
+
+    DATA_CACHE_CONFIG = CACHE_CONFIG
+
+    # Celery
+    class CeleryConfig:
+        broker_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+        result_backend = f"redis://{REDIS_HOST}:{REDIS_PORT}/1"
+        imports = ("superset.sql_lab", "superset.tasks.scheduler")
+
+    CELERY_CONFIG = CeleryConfig
+
+    # Security
+    SECRET_KEY = os.environ.get('SUPERSET_SECRET_KEY', 'CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET')
+
+    # Languages
+    LANGUAGES = {
+        "en": {"flag": "us", "name": "English"},
+        "ru": {"flag": "ru", "name": "Russian"},
+    }
+    BABEL_DEFAULT_LOCALE = "en"
+
+    # Feature Flags
+    FEATURE_FLAGS = {
+        "DASHBOARD_NATIVE_FILTERS": True,
+        "DASHBOARD_CROSS_FILTERS": True,
+        "ENABLE_TEMPLATE_PROCESSING": True,
+        "EMBEDDED_SUPERSET": True,
+        "ALERT_REPORTS": True,
+        "ALLOW_CSV_UPLOAD": True,
+        "ALLOW_EXCEL_UPLOAD": True,
+    }
+
+    # CSV/Excel upload
+    CSV_EXTENSIONS = {"csv", "tsv", "txt"}
+    EXCEL_EXTENSIONS = {"xlsx", "xls"}
+    ALLOWED_EXTENSIONS = CSV_EXTENSIONS | EXCEL_EXTENSIONS
+    UPLOAD_FOLDER = "/app/superset_home/uploads/"
+
+    # Custom logo CSS
+    CUSTOM_CSS = """
+    .navbar-brand img {
+        height: 80px !important;
+        max-height: 80px !important;
+        width: auto !important;
+        max-width: 500px !important;
+        object-fit: contain !important;
+    }
+    """
+
+    # Production settings
+    DEBUG = False
+    LOG_LEVEL = "INFO"
+    SUPERSET_WEBSERVER_PORT = 8088

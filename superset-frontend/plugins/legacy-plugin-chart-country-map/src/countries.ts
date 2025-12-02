@@ -107,6 +107,7 @@ import ivory_coast from './countries/ivory_coast.geojson';
 import japan from './countries/japan.geojson';
 import jordan from './countries/jordan.geojson';
 import kazakhstan from './countries/kazakhstan.geojson';
+import kazakhstan_districts from './countries/kazakhstan_districts.geojson';
 import kenya from './countries/kenya.geojson';
 import korea from './countries/korea.geojson';
 import kuwait from './countries/kuwait.geojson';
@@ -310,6 +311,7 @@ export const countries = {
   japan,
   jordan,
   kazakhstan,
+  kazakhstan_districts,
   kenya,
   korea,
   kuwait,

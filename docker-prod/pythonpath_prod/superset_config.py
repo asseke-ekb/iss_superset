@@ -86,7 +86,30 @@ FEATURE_FLAGS = {
     "ENABLE_TEMPLATE_PROCESSING": True,
     "EMBEDDED_SUPERSET": True,
     "ALERT_REPORTS": True,
+    "ALLOW_ADHOC_SUBQUERY": True,
+    "ENABLE_TEMPLATE_PROCESSING": True,
 }
+
+# ============================================================
+# CSV/EXCEL UPLOAD CONFIGURATION
+# ============================================================
+# Enable CSV and Excel upload functionality
+FEATURE_FLAGS["ALLOW_CSV_UPLOAD"] = True
+FEATURE_FLAGS["ALLOW_EXCEL_UPLOAD"] = True
+
+# CSV upload settings
+CSV_EXTENSIONS = {"csv", "tsv", "txt"}
+EXCEL_EXTENSIONS = {"xlsx", "xls"}
+ALLOWED_EXTENSIONS = CSV_EXTENSIONS | EXCEL_EXTENSIONS
+
+# Max file size for uploads (in bytes) - default 50MB
+CSV_TO_HIVE_UPLOAD_S3_BUCKET = None
+UPLOAD_FOLDER = "/app/superset_home/uploads/"
+CSV_TO_HIVE_UPLOAD_DIRECTORY = UPLOAD_FOLDER
+
+# Database for uploaded CSV/Excel files
+# By default, will use the main database connection
+UPLOADED_CSV_SCHEMA = None  # or specify a schema name like "uploads"
 
 # ============================================================
 # SECURITY
@@ -130,4 +153,57 @@ SUPERSET_WEBSERVER_TIMEOUT = 300
 # SMTP_USER = "user@example.com"
 # SMTP_PASSWORD = "password"
 # SMTP_MAIL_FROM = "superset@example.com"
+
+# ============================================================
+# CUSTOM LOGO STYLING
+# ============================================================
+# Increase logo size in navbar
+CUSTOM_CSS = """
+.navbar-brand img {
+    height: 80px !important;
+    max-height: 80px !important;
+    width: auto !important;
+    max-width: 500px !important;
+    object-fit: contain !important;
+}
+"""
+
+# ============================================================
+# CLICKHOUSE SUPPORT
+# ============================================================
+# ClickHouse driver is installed (clickhouse-connect)
+#
+# Connection string format:
+# clickhousedb://username:password@host:port/database
+#
+# Example HTTP connection:
+# clickhousedb://default:@clickhouse-server:8123/default
+#
+# Example HTTPS connection:
+# clickhousedb://username:password@clickhouse-server:8443/database?protocol=https
+#
+# Common parameters:
+# - secure=true/false       - use HTTPS
+# - verify=true/false       - verify SSL certificate
+# - compress=true/false     - enable compression
+# - session_id=<string>     - session identifier
+#
+# To add ClickHouse database:
+# 1. Go to Data → Databases → + Database
+# 2. Select "ClickHouse Connect" from the list
+# 3. Enter connection details:
+#    - Host: clickhouse-server
+#    - Port: 8123 (HTTP) or 8443 (HTTPS)
+#    - Database name: default (or your database)
+#    - Username: default
+#    - Password: (if required)
+#
+# Refer to documentation:
+# https://clickhouse.com/docs/en/integrations/superset
+
+# ============================================================
+# KAZAKHSTAN MAP
+# ============================================================
+# Kazakhstan map is available in Country Map visualization
+# Use "Kazakhstan" or "Kazakhstan Districts" from the country selector
 
