@@ -1,0 +1,210 @@
+#
+# Production Dockerfile for Apache Superset
+# Russian language only (no English)
+#
+# Build: docker build -f docker-prod/Dockerfile.prod -t superset-prod:latest .
+# Run: docker compose -f docker-prod/docker-compose.prod.yml up -d
+#
+
+######################################################################
+# Node stage to deal with static asset construction
+######################################################################
+ARG PY_VER=3.11.13-slim-trixie
+
+# If BUILDPLATFORM is null, set it to 'amd64' (or leave as is otherwise).
+ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
+
+# Include translations in the final build
+ARG BUILD_TRANSLATIONS="true"
+
+######################################################################
+# superset-node-ci used as a base for building frontend assets
+######################################################################
+FROM --platform=${BUILDPLATFORM} harbor.fms.kz/library/node:20-trixie-slim AS superset-node-ci
+ARG BUILD_TRANSLATIONS
+ENV BUILD_TRANSLATIONS=${BUILD_TRANSLATIONS}
+
+COPY --chmod=0755 docker/ /app/docker/
+ARG NPM_BUILD_CMD="build"
+
+# Install system dependencies required for node-gyp
+RUN /app/docker/apt-install.sh build-essential python3 zstd
+
+ENV BUILD_CMD=${NPM_BUILD_CMD} \
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
+RUN /app/docker/frontend-mem-nag.sh
+
+WORKDIR /app/superset-frontend
+
+RUN mkdir -p /app/superset/static/assets \
+             /app/superset/translations
+
+# Install npm dependencies
+RUN --mount=type=bind,source=./superset-frontend/package.json,target=./package.json \
+    --mount=type=bind,source=./superset-frontend/package-lock.json,target=./package-lock.json \
+    --mount=type=cache,target=/root/.cache \
+    --mount=type=cache,target=/root/.npm \
+    npm config set strict-ssl false && \
+    export NODE_TLS_REJECT_UNAUTHORIZED=0 && \
+    unset NODE_TLS_REJECT_UNAUTHORIZED && \
+    npm ci
+
+# Copy frontend source and build
+COPY superset-frontend /app/superset-frontend
+
+# Copy Russian translations for po2json conversion
+COPY superset/translations/ru /app/superset/translations/ru
+COPY superset/translations/*.json /app/superset/translations/
+COPY superset/translations/*.py /app/superset/translations/
+
+######################################################################
+# superset-node is used for compiling frontend assets
+######################################################################
+FROM superset-node-ci AS superset-node
+
+# Build the frontend with Russian translations
+RUN --mount=type=cache,target=/root/.npm \
+    npm config set strict-ssl false && \
+    echo "Running 'npm run ${BUILD_CMD}'" && \
+    npm run ${BUILD_CMD}
+
+######################################################################
+# Base python layer
+######################################################################
+FROM harbor.fms.kz/library/python:${PY_VER} AS python-base
+
+ARG SUPERSET_HOME="/app/superset_home"
+ENV SUPERSET_HOME=${SUPERSET_HOME}
+
+RUN mkdir -p ${SUPERSET_HOME}
+RUN useradd --user-group -d ${SUPERSET_HOME} -m --no-log-init --shell /bin/bash superset \
+    && chmod -R 1777 ${SUPERSET_HOME} \
+    && chown -R superset:superset ${SUPERSET_HOME}
+
+COPY --chmod=755 docker/*.sh /app/docker/
+
+RUN pip install --trusted-host pypi.org \
+                 --trusted-host files.pythonhosted.org \
+                 --disable-pip-version-check \
+                 --no-cache-dir uv
+RUN uv venv /app/.venv
+ENV PATH="/app/.venv/bin:${PATH}"
+
+######################################################################
+# Python translation compiler layer
+######################################################################
+FROM python-base AS python-translation-compiler
+
+ARG BUILD_TRANSLATIONS
+ENV BUILD_TRANSLATIONS=${BUILD_TRANSLATIONS}
+
+COPY requirements/translations.txt requirements/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    . /app/.venv/bin/activate && /app/docker/pip-install.sh --requires-build-essential -r requirements/translations.txt
+
+# Only copy Russian language
+COPY superset/translations/ru /app/translations_mo/ru
+COPY superset/translations/*.json /app/translations_mo/
+COPY superset/translations/*.py /app/translations_mo/
+
+RUN if [ "${BUILD_TRANSLATIONS}" = "true" ]; then \
+        pybabel compile -d /app/translations_mo || true; \
+    fi; \
+    rm -f /app/translations_mo/*/*/*.po
+
+######################################################################
+# Python APP common layer
+######################################################################
+FROM python-base AS python-common
+
+ENV SUPERSET_HOME="/app/superset_home" \
+    HOME="/app/superset_home" \
+    SUPERSET_ENV="production" \
+    FLASK_APP="superset.app:create_app()" \
+    PYTHONPATH="/app/pythonpath" \
+    SUPERSET_PORT="8088"
+
+COPY --chmod=755 docker/entrypoints /app/docker/entrypoints
+
+WORKDIR /app
+
+RUN mkdir -p \
+      ${PYTHONPATH} \
+      superset/static \
+      requirements \
+      superset-frontend \
+      apache_superset.egg-info \
+      requirements \
+    && touch superset/static/version_info.json
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/local/share/playwright-browsers
+
+COPY pyproject.toml setup.py MANIFEST.in README.md ./
+COPY superset-frontend/package.json superset-frontend/
+COPY scripts/check-env.py scripts/
+
+COPY --chmod=755 ./docker/entrypoints/run-server.sh /usr/bin/
+
+# Install debian dependencies
+RUN /app/docker/apt-install.sh \
+      curl \
+      libsasl2-dev \
+      libsasl2-modules-gssapi-mit \
+      libpq-dev \
+      libecpg-dev \
+      libldap2-dev
+
+# Create data directory
+RUN mkdir -p /app/data && chown -R superset:superset /app/data
+
+# Copy compiled frontend assets
+COPY --from=superset-node /app/superset/static/assets superset/static/assets
+
+# Copy superset code
+COPY superset superset
+
+# Remove all translations except Russian
+RUN find superset/translations -mindepth 1 -maxdepth 1 -type d ! -name 'ru' -exec rm -rf {} + \
+    && rm -f superset/translations/*/*/*.po 2>/dev/null || true
+
+# Merge translations from backend and frontend stages (Russian only)
+COPY --from=superset-node /app/superset/translations/ru superset/translations/ru
+COPY --from=superset-node /app/superset/translations/*.json superset/translations/
+COPY --from=python-translation-compiler /app/translations_mo superset/translations
+
+HEALTHCHECK CMD /app/docker/docker-healthcheck.sh
+CMD ["/app/docker/entrypoints/run-server.sh"]
+EXPOSE ${SUPERSET_PORT}
+
+######################################################################
+# Production image
+######################################################################
+FROM python-common AS production
+
+# Install Python dependencies
+COPY requirements/base.txt requirements/
+COPY superset-core superset-core
+
+RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
+    /app/docker/pip-install.sh --requires-build-essential -r requirements/base.txt
+
+# Install the superset package
+RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
+    uv pip install -e .
+
+# Install database drivers for production
+RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
+    uv pip install .[postgres]
+
+# Install ClickHouse driver
+RUN --mount=type=cache,target=${SUPERSET_HOME}/.cache/uv \
+    uv pip install clickhouse-connect
+
+# Compile Python files for faster startup
+RUN python -m compileall /app/superset
+
+# Copy custom logo
+COPY docker-prod/custom_logo.png /app/superset/static/assets/images/superset-logo-horiz.png
+
+USER superset

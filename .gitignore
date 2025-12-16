@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Docker volumes
+superset_home/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.prod
+
+# Cache
+.cache/
+.pytest_cache/
+.coverage
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Large folders (optional - remove if needed)
+# superset/superset-frontend/node_modules/
